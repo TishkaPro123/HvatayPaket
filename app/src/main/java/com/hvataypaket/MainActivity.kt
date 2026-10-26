@@ -8,8 +8,12 @@ import android.graphics.Color
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity : Activity() {
 
@@ -18,10 +22,48 @@ class MainActivity : Activity() {
     private val neon = Color.rgb(169, 255, 104)
     private val muted = Color.rgb(165, 174, 192)
 
-    private lateinit var statusTitle: TextView
-    private lateinit var statusText: TextView
-    private lateinit var startButton: Button
-    private lateinit var stopButton: Button
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var status: TextView
+    private lateinit var xInput: EditText
+    private lateinit var yInput: EditText
+    private lateinit var delayInput: EditText
+
+    private var tapping = false
+    private var collectCoins = false
+
+    private val tapLoop = object : Runnable {
+        override fun run() {
+            if (!tapping) return
+
+            val x = xInput.text.toString().toFloatOrNull()
+            val y = yInput.text.toString().toFloatOrNull()
+            val delay = delayInput.text.toString().toLongOrNull()
+                ?: 200L
+
+            if (x == null || y == null) {
+                stopTapping()
+                status.text = "Введи корректные координаты"
+                return
+            }
+
+            val service = AutoTapService.instance
+            if (service == null) {
+                stopTapping()
+                status.text = "Включи службу доступности"
+                return
+            }
+
+            service.testTap(x, y) { success ->
+                if (!success) {
+                    runOnUiThread {
+                        status.text = "Нажатие не выполнено"
+                    }
+                }
+            }
+
+            handler.postDelayed(this, delay.coerceIn(100L, 5000L))
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,161 +71,126 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(24, 32, 24, 32)
+            setPadding(24, 24, 24, 24)
             setBackgroundColor(bg)
         }
 
-        val title = TextView(this).apply {
-            text = "ХВАТАЙ ПАКЕТ"
-            textSize = 29f
-            setTextColor(neon)
-            gravity = Gravity.CENTER
-        }
+        fun label(text: String): TextView =
+            TextView(this).apply {
+                this.text = text
+                textSize = 16f
+                setTextColor(neon)
+            }
 
-        val subtitle = TextView(this).apply {
-            text = "АВТО • ПАНЕЛЬ УПРАВЛЕНИЯ"
-            textSize = 13f
-            setTextColor(muted)
-            gravity = Gravity.CENTER
-        }
+        fun field(value: String, hintText: String): EditText =
+            EditText(this).apply {
+                setText(value)
+                hint = hintText
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                setHintTextColor(muted)
+                inputType = 8194
+                setSingleLine(true)
+            }
 
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(16, 22, 16, 22)
-            setBackgroundColor(panel)
-        }
+        root.addView(label("ХВАТАЙ ПАКЕТ АВТО"))
+        root.addView(space(12))
+        status = label("● ГОТОВО К НАСТРОЙКЕ")
+        root.addView(status)
+        root.addView(space(12))
 
-        statusTitle = TextView(this).apply {
-            textSize = 17f
-            gravity = Gravity.CENTER
-            setTextColor(neon)
-        }
+        root.addView(label("Координата X"))
+        xInput = field("400", "X")
+        root.addView(xInput)
 
-        statusText = TextView(this).apply {
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(muted)
-        }
+        root.addView(label("Координата Y"))
+        yInput = field("900", "Y")
+        root.addView(yInput)
 
-        card.addView(statusTitle)
-        card.addView(space(8))
-        card.addView(statusText)
+        root.addView(label("Интервал (мс, минимум 100)"))
+        delayInput = field("200", "200")
+        root.addView(delayInput)
 
-        startButton = Button(this).apply {
-            text = "▶  ЗАПУСТИТЬ"
-            setTextColor(bg)
-            setBackgroundColor(neon)
+        val start = Button(this).apply {
+            text = "▶ СТАРТ"
             setOnClickListener {
-                if (!AutoTapService.serviceConnected) {
-                    statusTitle.text = "●  СЛУЖБА ВЫКЛЮЧЕНА"
-                    statusText.text =
-                        "Открой настройки и включи службу приложения"
+                if (!AutoTapService.serviceConnected ||
+                    AutoTapService.instance == null) {
+                    status.text = "Сначала включи службу доступности"
+                    startActivity(
+                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    )
+                    return@setOnClickListener
+                }
+                if (xInput.text.toString().toFloatOrNull() == null ||
+                    yInput.text.toString().toFloatOrNull() == null) {
+                    status.text = "Проверь координаты X и Y"
                     return@setOnClickListener
                 }
 
+                tapping = true
                 AutoTapService.automationRunning = true
-                updateStatus()
+                status.text = "● АВТОНАЖАТИЯ ВКЛЮЧЕНЫ"
+                handler.removeCallbacks(tapLoop)
+                handler.post(tapLoop)
             }
         }
 
-        stopButton = Button(this).apply {
-            text = "■  ОСТАНОВИТЬ"
-            setTextColor(neon)
-            setBackgroundColor(panel)
+        val stop = Button(this).apply {
+            text = "■ СТОП"
             setOnClickListener {
-                AutoTapService.automationRunning = false
-                updateStatus()
+                stopTapping()
+                status.text = "● ОСТАНОВЛЕНО"
             }
         }
 
-        val settingsButton = Button(this).apply {
-            text = "⚙  НАСТРОЙКИ СЛУЖБЫ"
-            setTextColor(neon)
-            setBackgroundColor(panel)
+        val collect = Button(this).apply {
+            text = "🪙 ЗАБРАТЬ МОНЕТЫ"
             setOnClickListener {
-                startActivity(
-                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                )
-            }
-        }
-
-        root.addView(title)
-        root.addView(space(8))
-        root.addView(subtitle)
-        root.addView(space(28))
-        root.addView(card)
-        root.addView(space(16))
-        root.addView(startButton)
-        root.addView(stopButton)
-        root.addView(settingsButton) 
-        val testButton = Button(this).apply {
-            text = "☝  ТЕСТ НАЖАТИЯ"
-            setTextColor(neon)
-            setBackgroundColor(panel)
-
-            setOnClickListener {
+                collectCoins = true
                 val service = AutoTapService.instance
-
-                if (service == null) {
-                    statusTitle.text = "●  СЛУЖБА НЕ ПОДКЛЮЧЕНА"
-                    statusText.text = "Включи службу в настройках Android"
-                } else {
-                    service.testTap(200f, 400f) { success ->
+                if (service != null) {
+                    service.testTap(
+                        xInput.text.toString().toFloatOrNull() ?: 400f,
+                        yInput.text.toString().toFloatOrNull() ?: 1550f
+                    ) {
                         runOnUiThread {
-                            statusTitle.text =
-                                if (success) "●  ТЕСТ УСПЕШЕН"
-                                else "●  НАЖАТИЕ НЕ ВЫПОЛНЕНО"
-
-                            statusText.text =
-                                "Проверка координат экрана: X=200, Y=400"
+                            status.text = "Команда получения монет выполнена"
+                            collectCoins = false
                         }
                     }
+                } else {
+                    collectCoins = false
+                    status.text = "Сначала включи службу"
                 }
             }
         }
 
-        root.addView(testButton)
-        root.addView(space(16))
-
-        val footer = TextView(this).apply {
-            text = "Версия 0.2 • автоматизация в разработке"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(muted)
+        listOf(start, stop, collect).forEach {
+            it.setTextColor(if (it == start) bg else neon)
+            it.setBackgroundColor(if (it == start) neon else panel)
+            root.addView(it)
         }
 
-        root.addView(footer)
+        root.addView(space(12))
+        root.addView(label("Сначала проверь координаты на безопасном экране."))
+
         setContentView(root)
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (::statusTitle.isInitialized) updateStatus()
-    }private fun updateStatus() {
-        when {
-            !AutoTapService.serviceConnected -> {
-                statusTitle.text = "●  СЛУЖБА ВЫКЛЮЧЕНА"
-                statusText.text = "Включи службу в настройках Android"
-            }
-
-            AutoTapService.automationRunning -> {
-                statusTitle.text = "●  РЕЖИМ ВКЛЮЧЁН"
-                statusText.text =
-                    "Служба активна; распознавание игры ещё не готово"
-            }
-
-            else -> {
-                statusTitle.text = "●  ГОТОВО К ЗАПУСКУ"
-                statusText.text = "Служба подключена, режим остановлен"
-            }
-        }
+    private fun stopTapping() {
+        tapping = false
+        AutoTapService.automationRunning = false
+        handler.removeCallbacks(tapLoop)
     }
 
-    private fun space(height: Int): View {
-        return View(this).apply {
-            layoutParams =
-                LinearLayout.LayoutParams(1, height)
-        }
+    override fun onDestroy() {
+        stopTapping()
+        super.onDestroy()
     }
+
+    private fun space(height: Int): View =
+        View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(1, height)
+        }
 }
