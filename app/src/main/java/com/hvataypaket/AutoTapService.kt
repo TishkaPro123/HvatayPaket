@@ -13,22 +13,24 @@ class AutoTapService : AccessibilityService() {
 
         @Volatile
         var serviceConnected = false
+
+        var instance: AutoTapService? = null
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         serviceConnected = true
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Распознавание игры пока не реализовано.
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
     override fun onInterrupt() {
         automationRunning = false
     }
 
     override fun onDestroy() {
+        instance = null
         serviceConnected = false
         automationRunning = false
         super.onDestroy()
@@ -48,5 +50,32 @@ class AutoTapService : AccessibilityService() {
             .build()
 
         dispatchGesture(gesture, null, null)
+    }
+
+    fun testTap(x: Float, y: Float, callback: (Boolean) -> Unit) {
+        val path = Path().apply {
+            moveTo(x, y)
+        }
+
+        val gesture = GestureDescription.Builder()
+            .addStroke(
+                GestureDescription.StrokeDescription(path, 0, 100)
+            )
+            .build()
+
+        dispatchGesture(gesture, object :
+            AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(
+                gestureDescription: GestureDescription
+            ) {
+                callback(true)
+            }
+
+            override fun onCancelled(
+                gestureDescription: GestureDescription
+            ) {
+                callback(false)
+            }
+        }, null)
     }
 }
