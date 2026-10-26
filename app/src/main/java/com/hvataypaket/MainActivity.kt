@@ -2,6 +2,8 @@ package com.hvataypaket
 
 import android.app.Activity
 import android.os.Bundle
+import android.content.Intent
+import android.provider.Settings
 import android.graphics.Color
 import android.view.Gravity
 import android.widget.Button
@@ -27,16 +29,16 @@ class MainActivity : Activity() {
         }
 
         val info = TextView(this).apply {
-            text = "\nАвтоматизация игры\n\nПока режим тестовый."
+            text = "Служба нажатий подключена.\n\nАвтоматическая игра ещё не реализована."
             textSize = 18f
             setTextColor(Color.DKGRAY)
             gravity = Gravity.CENTER
         }
 
         val button = Button(this).apply {
-            text = "Проверить запуск"
+            text = "Открыть настройки службы"
             setOnClickListener {
-                info.text = "\nПриложение запущено!\n\nАвтоматические нажатия ещё не подключены."
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
         }
 
