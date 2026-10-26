@@ -116,7 +116,34 @@ class MainActivity : Activity() {
         root.addView(space(16))
         root.addView(startButton)
         root.addView(stopButton)
-        root.addView(settingsButton)
+        root.addView(settingsButton) 
+        val testButton = Button(this).apply {
+            text = "☝  ТЕСТ НАЖАТИЯ"
+            setTextColor(neon)
+            setBackgroundColor(panel)
+
+            setOnClickListener {
+                val service = AutoTapService.instance
+
+                if (service == null) {
+                    statusTitle.text = "●  СЛУЖБА НЕ ПОДКЛЮЧЕНА"
+                    statusText.text = "Включи службу в настройках Android"
+                } else {
+                    service.testTap(200f, 400f) { success ->
+                        runOnUiThread {
+                            statusTitle.text =
+                                if (success) "●  ТЕСТ УСПЕШЕН"
+                                else "●  НАЖАТИЕ НЕ ВЫПОЛНЕНО"
+
+                            statusText.text =
+                                "Проверка координат экрана: X=200, Y=400"
+                        }
+                    }
+                }
+            }
+        }
+
+        root.addView(testButton)
         root.addView(space(16))
 
         val footer = TextView(this).apply {
