@@ -7,13 +7,36 @@ import android.view.accessibility.AccessibilityEvent
 
 class AutoTapService : AccessibilityService() {
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Пока автоматические нажатия не запускаются сами.
+    companion object {
+        @Volatile
+        var automationRunning = false
+
+        @Volatile
+        var serviceConnected = false
     }
 
-    override fun onInterrupt() {}
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        serviceConnected = true
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Распознавание игры пока не реализовано.
+    }
+
+    override fun onInterrupt() {
+        automationRunning = false
+    }
+
+    override fun onDestroy() {
+        serviceConnected = false
+        automationRunning = false
+        super.onDestroy()
+    }
 
     fun tap(x: Float, y: Float) {
+        if (!automationRunning) return
+
         val path = Path().apply {
             moveTo(x, y)
         }
