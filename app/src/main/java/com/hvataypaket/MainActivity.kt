@@ -18,13 +18,18 @@ class MainActivity : Activity() {
     private val neon = Color.rgb(169, 255, 104)
     private val muted = Color.rgb(165, 174, 192)
 
+    private lateinit var statusTitle: TextView
+    private lateinit var statusText: TextView
+    private lateinit var startButton: Button
+    private lateinit var stopButton: Button
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(24, 36, 24, 28)
+            setPadding(24, 32, 24, 32)
             setBackgroundColor(bg)
         }
 
@@ -33,85 +38,125 @@ class MainActivity : Activity() {
             textSize = 29f
             setTextColor(neon)
             gravity = Gravity.CENTER
-            letterSpacing = 0.08f
         }
 
         val subtitle = TextView(this).apply {
             text = "АВТО • ПАНЕЛЬ УПРАВЛЕНИЯ"
-            textSize = 12f
+            textSize = 13f
             setTextColor(muted)
             gravity = Gravity.CENTER
         }
 
-        val statusCard = LinearLayout(this).apply {
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(20, 22, 20, 22)
+            setPadding(16, 22, 16, 22)
             setBackgroundColor(panel)
         }
 
-        val statusTitle = TextView(this).apply {
-            text = "●  СИСТЕМА ГОТОВА"
-            textSize = 16f
+        statusTitle = TextView(this).apply {
+            textSize = 17f
+            gravity = Gravity.CENTER
             setTextColor(neon)
-            gravity = Gravity.CENTER
         }
 
-        val statusText = TextView(this).apply {
-            text = "Автоматическая игра пока не подключена"
+        statusText = TextView(this).apply {
             textSize = 14f
-            setTextColor(muted)
             gravity = Gravity.CENTER
+            setTextColor(muted)
         }
 
-        statusCard.addView(statusTitle)
-        statusCard.addView(statusText)
+        card.addView(statusTitle)
+        card.addView(space(8))
+        card.addView(statusText)
 
-        val startButton = Button(this).apply {
+        startButton = Button(this).apply {
             text = "▶  ЗАПУСТИТЬ"
-            textSize = 16f
-            setTextColor(Color.rgb(16, 19, 29))
+            setTextColor(bg)
             setBackgroundColor(neon)
             setOnClickListener {
-                statusTitle.text = "●  ОЖИДАЕТ НАСТРОЙКИ"
-                statusText.text = "Сначала подключи службу доступности"
+                if (!AutoTapService.serviceConnected) {
+                    statusTitle.text = "●  СЛУЖБА ВЫКЛЮЧЕНА"
+                    statusText.text =
+                        "Открой настройки и включи службу приложения"
+                    return@setOnClickListener
+                }
+
+                AutoTapService.automationRunning = true
+                updateStatus()
+            }
+        }
+
+        stopButton = Button(this).apply {
+            text = "■  ОСТАНОВИТЬ"
+            setTextColor(neon)
+            setBackgroundColor(panel)
+            setOnClickListener {
+                AutoTapService.automationRunning = false
+                updateStatus()
             }
         }
 
         val settingsButton = Button(this).apply {
             text = "⚙  НАСТРОЙКИ СЛУЖБЫ"
-            textSize = 14f
             setTextColor(neon)
             setBackgroundColor(panel)
             setOnClickListener {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                )
             }
         }
 
-        val note = TextView(this).apply {
-            text = "Версия 0.1 • интерфейс в разработке"
+        root.addView(title)
+        root.addView(space(8))
+        root.addView(subtitle)
+        root.addView(space(28))
+        root.addView(card)
+        root.addView(space(16))
+        root.addView(startButton)
+        root.addView(stopButton)
+        root.addView(settingsButton)
+        root.addView(space(16))
+
+        val footer = TextView(this).apply {
+            text = "Версия 0.2 • автоматизация в разработке"
             textSize = 12f
-            setTextColor(muted)
             gravity = Gravity.CENTER
+            setTextColor(muted)
         }
 
-        root.addView(title)
-        root.addView(subtitle)
-        root.addView(space(24))
-        root.addView(statusCard)
-        root.addView(space(20))
-        root.addView(startButton)
-        root.addView(space(8))
-        root.addView(settingsButton)
-        root.addView(space(24))
-        root.addView(note)
-
+        root.addView(footer)
         setContentView(root)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::statusTitle.isInitialized) updateStatus()
+    }private fun updateStatus() {
+        when {
+            !AutoTapService.serviceConnected -> {
+                statusTitle.text = "●  СЛУЖБА ВЫКЛЮЧЕНА"
+                statusText.text = "Включи службу в настройках Android"
+            }
+
+            AutoTapService.automationRunning -> {
+                statusTitle.text = "●  РЕЖИМ ВКЛЮЧЁН"
+                statusText.text =
+                    "Служба активна; распознавание игры ещё не готово"
+            }
+
+            else -> {
+                statusTitle.text = "●  ГОТОВО К ЗАПУСКУ"
+                statusText.text = "Служба подключена, режим остановлен"
+            }
+        }
     }
 
     private fun space(height: Int): View {
         return View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(1, height)
+            layoutParams =
+                LinearLayout.LayoutParams(1, height)
         }
     }
 }
